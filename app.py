@@ -4,14 +4,17 @@ import pandas as pd
 
 st.set_page_config(page_title="CRM - Hoberg & Driesch", layout="wide")
 
-# Conexión a la base de datos e inicialización de tablas
+# Conexión a la base de datos e inicialización limpia de tablas
 def init_db():
     conn = sqlite3.connect('crm_hoberg.db')
     c = conn.cursor()
     
-    # Tabla de Familias de Materiales
+    # Borramos la tabla antigua para evitar conflictos de columnas
+    c.execute('DROP TABLE IF EXISTS familias')
+    
+    # Tabla de Familias de Materiales con la estructura correcta
     c.execute('''
-        CREATE TABLE IF NOT EXISTS familias (
+        CREATE TABLE familias (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             codigo_almacen TEXT,
             grupo_sap TEXT,
@@ -21,18 +24,15 @@ def init_db():
         )
     ''')
     
-    # Insertar datos iniciales si la tabla está vacía (basado en tu listado de familias)
-    c.execute("SELECT COUNT(*) FROM familias")
-    if c.fetchone()[0] == 0:
-        familias_iniciales = [
-            ("1110", "DUS", "Dusseldorf", "B.P + Tubo caldera SIN SOLDADURA + Calibrados (BK) + Conducción Hidraúlica (NBK)", "Almacén origen"),
-            ("1810", "DUIS", "Duisburg", "TE Frio + Tubo red. SOLDADO (Tarifa EN10219)", "Almacén origen"),
-            ("1110", "DUS", "Dusseldorf **Schierle**", "H8 + H9 + tubos cromados + macizos cromados (Tarifa HIDRAULICA)", "Especial"),
-            ("4210", "SPN", "Spain", "Directos de fabrica a cliente", "Nacional"),
-        ]
-        c.executemany("INSERT INTO familias (codigo_almacen, grupo_sap, origen, descripcion, observaciones) VALUES (?, ?, ?, ?, ?)", familias_iniciales)
-        conn.commit()
-        
+    # Insertar datos iniciales
+    familias_iniciales = [
+        ("1110", "DUS", "Dusseldorf", "B.P + Tubo caldera SIN SOLDADURA + Calibrados (BK) + Conducción Hidraúlica (NBK)", "Almacén origen"),
+        ("1810", "DUIS", "Duisburg", "TE Frio + Tubo red. SOLDADO (Tarifa EN10219)", "Almacén origen"),
+        ("1110", "DUS", "Dusseldorf **Schierle**", "H8 + H9 + tubos cromados + macizos cromados (Tarifa HIDRAULICA)", "Especial"),
+        ("4210", "SPN", "Spain", "Directos de fabrica a cliente", "Nacional"),
+    ]
+    c.executemany("INSERT INTO familias (codigo_almacen, grupo_sap, origen, descripcion, observaciones) VALUES (?, ?, ?, ?, ?)", familias_iniciales)
+    conn.commit()
     conn.close()
 
 init_db()
@@ -46,7 +46,6 @@ if menu == "Dashboard":
     st.subheader("📊 Panel de Control General")
     col1, col2, col3 = st.columns(3)
     
-    # Consultar métricas reales
     conn = sqlite3.connect('crm_hoberg.db')
     total_familias = pd.read_sql("SELECT COUNT(*) as total FROM familias", conn).iloc[0]['total']
     conn.close()
@@ -54,7 +53,7 @@ if menu == "Dashboard":
     col1.metric("Familias de Material", str(total_familias))
     col2.metric("Clientes Activos", "0")
     col3.metric("Oportunidades Nuevas", "0")
-    st.info("💡 Tu CRM está operativo en la nube. Selecciona 'Familias de Materiales' en el menú lateral para ver el catálogo.")
+    st.info("💡 Tu CRM está operativo en la nube.")
 
 elif menu == "Gestión de Clientes":
     st.subheader("👥 Ficha de Clientes y Obras")
@@ -64,7 +63,6 @@ elif menu == "Familias de Materiales":
     st.subheader("📦 Familias de Materiales (Tarifas y Orígenes)")
     st.write("Consulta y gestión de los grupos de materiales y especificaciones de tubo.")
     
-    # Mostrar tabla desde la base de datos
     conn = sqlite3.connect('crm_hoberg.db')
     df_familias = pd.read_sql("SELECT codigo_almacen AS 'Cód. Almacén', grupo_sap AS 'Grupo SAP', origen AS 'Origen / Proveedor', descripcion AS 'Descripción Material', observaciones AS 'Observaciones' FROM familias", conn)
     conn.close()
@@ -86,7 +84,7 @@ elif menu == "Familias de Materiales":
                 c.execute("INSERT INTO familias (codigo_almacen, grupo_sap, origen, descripcion, observaciones) VALUES (?, ?, ?, ?, ?)", (c_alm, g_sap, origen, desc, obs))
                 conn.commit()
                 conn.close()
-                st.success("¡Familia añadida correctamente! Recarga la página para verla.")
+                st.success("¡Familia añadida correctamente!")
 
 elif menu == "Buscador BOE y Licitaciones":
     st.subheader("🔍 Novedades BOE y Plataforma de Contratación")
