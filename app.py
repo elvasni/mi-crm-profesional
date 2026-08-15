@@ -1,33 +1,38 @@
 import streamlit as st
 import sqlite3
+import pandas as pd
 
 st.set_page_config(page_title="CRM - Hoberg & Driesch", layout="wide")
 
-# Conexión a la base de datos SQLite local en la nube
+# Conexión a la base de datos e inicialización de tablas
 def init_db():
     conn = sqlite3.connect('crm_hoberg.db')
     c = conn.cursor()
+    
     # Tabla de Familias de Materiales
     c.execute('''
         CREATE TABLE IF NOT EXISTS familias (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             codigo_almacen TEXT,
+            grupo_sap TEXT,
             origen TEXT,
             descripcion TEXT,
-            notas TEXT
+            observaciones TEXT
         )
     ''')
-    # Tabla de Clientes
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS clientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT,
-            provincia TEXT,
-            comercial TEXT,
-            estado TEXT
-        )
-    ''')
-    conn.commit()
+    
+    # Insertar datos iniciales si la tabla está vacía (basado en tu listado de familias)
+    c.execute("SELECT COUNT(*) FROM familias")
+    if c.fetchone()[0] == 0:
+        familias_iniciales = [
+            ("1110", "DUS", "Dusseldorf", "B.P + Tubo caldera SIN SOLDADURA + Calibrados (BK) + Conducción Hidraúlica (NBK)", "Almacén origen"),
+            ("1810", "DUIS", "Duisburg", "TE Frio + Tubo red. SOLDADO (Tarifa EN10219)", "Almacén origen"),
+            ("1110", "DUS", "Dusseldorf **Schierle**", "H8 + H9 + tubos cromados + macizos cromados (Tarifa HIDRAULICA)", "Especial"),
+            ("4210", "SPN", "Spain", "Directos de fabrica a cliente", "Nacional"),
+        ]
+        c.executemany("INSERT INTO familias (codigo_almacen, grupo_sap, origen, descripcion, observaciones) VALUES (?, ?, ?, ?, ?)", familias_iniciales)
+        conn.commit()
+        
     conn.close()
 
 init_db()
@@ -40,10 +45,16 @@ menu = st.sidebar.selectbox("Ir a:", ["Dashboard", "Gestión de Clientes", "Fami
 if menu == "Dashboard":
     st.subheader("📊 Panel de Control General")
     col1, col2, col3 = st.columns(3)
-    col1.metric("Clientes Totales", "0")
+    
+    # Consultar métricas reales
+    conn = sqlite3.connect('crm_hoberg.db')
+    total_familias = pd.read_sql("SELECT COUNT(*) as total FROM familias", conn).iloc[0]['total']
+    conn.close()
+    
+    col1.metric("Familias de Material", str(total_familias))
     col2.metric("Clientes Activos", "0")
     col3.metric("Oportunidades Nuevas", "0")
-    st.info("💡 Tu CRM ya está preparado. Selecciona un apartado en el menú lateral para empezar a trabajar.")
+    st.info("💡 Tu CRM está operativo en la nube. Selecciona 'Familias de Materiales' en el menú lateral para ver el catálogo.")
 
 elif menu == "Gestión de Clientes":
     st.subheader("👥 Ficha de Clientes y Obras")
@@ -51,7 +62,31 @@ elif menu == "Gestión de Clientes":
 
 elif menu == "Familias de Materiales":
     st.subheader("📦 Familias de Materiales (Tarifas y Orígenes)")
-    st.write("Aquí cargaremos las familias de tubos, soldaduras y aceros de tus catálogos.")
+    st.write("Consulta y gestión de los grupos de materiales y especificaciones de tubo.")
+    
+    # Mostrar tabla desde la base de datos
+    conn = sqlite3.connect('crm_hoberg.db')
+    df_familias = pd.read_sql("SELECT codigo_almacen AS 'Cód. Almacén', grupo_sap AS 'Grupo SAP', origen AS 'Origen / Proveedor', descripcion AS 'Descripción Material', observaciones AS 'Observaciones' FROM familias", conn)
+    conn.close()
+    
+    st.dataframe(df_familias, use_container_width=True)
+    
+    with st.expander("➕ Añadir nueva familia de material"):
+        with st.form("form_familia"):
+            c_alm = st.text_input("Código Almacén (ej. 1110)")
+            g_sap = st.text_input("Grupo SAP (ej. DUS)")
+            origen = st.text_input("Origen / Proveedor")
+            desc = st.text_input("Descripción del material")
+            obs = st.text_input("Observaciones")
+            btn_guardar = st.form_submit_button("Guardar Familia")
+            
+            if btn_guardar:
+                conn = sqlite3.connect('crm_hoberg.db')
+                c = conn.cursor()
+                c.execute("INSERT INTO familias (codigo_almacen, grupo_sap, origen, descripcion, observaciones) VALUES (?, ?, ?, ?, ?)", (c_alm, g_sap, origen, desc, obs))
+                conn.commit()
+                conn.close()
+                st.success("¡Familia añadida correctamente! Recarga la página para verla.")
 
 elif menu == "Buscador BOE y Licitaciones":
     st.subheader("🔍 Novedades BOE y Plataforma de Contratación")
